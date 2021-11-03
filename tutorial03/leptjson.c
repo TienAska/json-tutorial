@@ -1,3 +1,8 @@
+#ifdef _WINDOWS
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#endif
+
 #include "leptjson.h"
 #include <assert.h>  /* assert() */
 #include <errno.h>   /* errno, ERANGE */
@@ -105,38 +110,24 @@ static int lept_parse_string(lept_context* c, lept_value* v) {
         case '\\':
             ch = *p++;
             switch (ch) {
-            case '\"':
-                PUTC(c, '\"');
-                break;
-            case '\\':
-                PUTC(c, '\\');
-                break;
-            case '/':
-                PUTC(c, '/');
-                break;
-            case 'b':
-                PUTC(c, '\b');
-                break;
-            case 'f':
-                PUTC(c, '\f');
-                break;
-            case 'n':
-                PUTC(c, '\n');
-                break;
-            case 'r':
-                PUTC(c, '\r');
-                break;
-            case 't':
-                PUTC(c, '\t');
-                break;
+			case '\"': PUTC(c, '\"'); break;
+			case '\\': PUTC(c, '\\'); break;
+			case '/':  PUTC(c, '/');  break;
+            case 'b':  PUTC(c, '\b'); break;
+            case 'f':  PUTC(c, '\f'); break;
+            case 'n':  PUTC(c, '\n'); break;
+            case 'r':  PUTC(c, '\r'); break;
+            case 't':  PUTC(c, '\t'); break;
             default:
                 c->top = head;
                 return LEPT_PARSE_INVALID_STRING_ESCAPE;
             }
             break;
         default:
-            if (ch > '\x00' && ch < '\x20')
+            if (ch < '\x20') {
+                c->top = head;
                 return LEPT_PARSE_INVALID_STRING_CHAR;
+            }
             else
                 PUTC(c, ch);
         }
@@ -193,7 +184,7 @@ int lept_get_boolean(const lept_value* v) {
 }
 
 void lept_set_boolean(lept_value* v, int b) {
-    assert(v != NULL);
+    lept_free(v);
     v->type = b ? LEPT_TRUE : LEPT_FALSE;
 }
 
@@ -203,8 +194,9 @@ double lept_get_number(const lept_value* v) {
 }
 
 void lept_set_number(lept_value* v, double n) {
-    assert(v != NULL && v->type == LEPT_NUMBER);
+    lept_free(v);
     v->n = n;
+    v->type = LEPT_NUMBER;
 }
 
 const char* lept_get_string(const lept_value* v) {
