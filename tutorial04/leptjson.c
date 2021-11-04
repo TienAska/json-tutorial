@@ -93,7 +93,7 @@ static int lept_parse_number(lept_context* c, lept_value* v) {
 
 static const char* lept_parse_hex4(const char* p, unsigned* u) {
     size_t i = 0;
-    *u = 0;
+    unsigned cp = 0;
     while (i < 4) {
         unsigned t;
         if (ISDIGIT(p[i]))
@@ -104,9 +104,16 @@ static const char* lept_parse_hex4(const char* p, unsigned* u) {
             t = p[i] - 87;
         else
             return NULL;
-        *u += t * POW16(3 - i);
+        cp += t * POW16(3 - i);
         i++;
     }
+    if (*u >= 0xD800 && *u <= 0xDBFF)
+    {
+		cp = 0x10000 + (*u - 0xD800) * 0x400 + (cp - 0xDC00);
+    }
+	
+    *u = cp;
+
     return p + i;
 }
 
@@ -136,44 +143,51 @@ static void lept_encode_utf8(lept_context* c, unsigned u) {
 
 static int lept_parse_string(lept_context* c, lept_value* v) {
     size_t head = c->top, len;
-    unsigned u;
+    unsigned u = 0;
     const char* p;
     EXPECT(c, '\"');
     p = c->json;
     for (;;) {
         char ch = *p++;
         switch (ch) {
-            case '\"':
-                len = c->top - head;
-                lept_set_string(v, (const char*)lept_context_pop(c, len), len);
-                c->json = p;
-                return LEPT_PARSE_OK;
-            case '\\':
-                switch (*p++) {
-                    case '\"': PUTC(c, '\"'); break;
-                    case '\\': PUTC(c, '\\'); break;
-                    case '/':  PUTC(c, '/' ); break;
-                    case 'b':  PUTC(c, '\b'); break;
-                    case 'f':  PUTC(c, '\f'); break;
-                    case 'n':  PUTC(c, '\n'); break;
-                    case 'r':  PUTC(c, '\r'); break;
-                    case 't':  PUTC(c, '\t'); break;
-                    case 'u':
-                        if (!(p = lept_parse_hex4(p, &u)))
-                            STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_HEX);
-                        /* \TODO surrogate handling */
-                        lept_encode_utf8(c, u);
-                        break;
-                    default:
-                        STRING_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE);
-                }
+        case '\"':
+            len = c->top - head;
+            lept_set_string(v, (const char*)lept_context_pop(c, len), len);
+            c->json = p;
+            return LEPT_PARSE_OK;
+        case '\\':
+            switch (*p++) {
+            case '\"': PUTC(c, '\"'); break;
+            case '\\': PUTC(c, '\\'); break;
+            case '/':  PUTC(c, '/'); break;
+            case 'b':  PUTC(c, '\b'); break;
+            case 'f':  PUTC(c, '\f'); break;
+            case 'n':  PUTC(c, '\n'); break;
+            case 'r':  PUTC(c, '\r'); break;
+            case 't':  PUTC(c, '\t'); break;
+            case 'u':
+                do {
+                    if (!(p = lept_parse_hex4(p, &u)))
+                        STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_HEX);
+					if (u >= 0xD800 && u <= 0xDBFF) {
+                        if (p[0] != '\\' || p[1] != 'u' || !(p[2] == 'D' || p[2] == 'd') || !((p[3] >= 'C' && p[3] <= 'F') || (p[3] >= 'c' && p[3] <= 'f')))
+                            STRING_ERROR(LEPT_PARSE_INVALID_UNICODE_SURROGATE);
+                        else
+                            p += 2;
+					}
+                } while (u >= 0xD800 && u <= 0xDBFF);
+                lept_encode_utf8(c, u);
                 break;
-            case '\0':
-                STRING_ERROR(LEPT_PARSE_MISS_QUOTATION_MARK);
             default:
-                if ((unsigned char)ch < 0x20)
-                    STRING_ERROR(LEPT_PARSE_INVALID_STRING_CHAR);
-                PUTC(c, ch);
+                STRING_ERROR(LEPT_PARSE_INVALID_STRING_ESCAPE);
+            }
+            break;
+        case '\0':
+            STRING_ERROR(LEPT_PARSE_MISS_QUOTATION_MARK);
+        default:
+            if ((unsigned char)ch < 0x20)
+                STRING_ERROR(LEPT_PARSE_INVALID_STRING_CHAR);
+            PUTC(c, ch);
         }
     }
 }
