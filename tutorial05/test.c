@@ -131,9 +131,34 @@ static void test_parse_array() {
     lept_value v;
 
     lept_init(&v);
-    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "[ ]"));
+    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "[ null, false, true, 123, \"abc\" ]"));
     EXPECT_EQ_INT(LEPT_ARRAY, lept_get_type(&v));
-    EXPECT_EQ_SIZE_T(0, lept_get_array_size(&v));
+    EXPECT_EQ_SIZE_T(5, lept_get_array_size(&v));
+	EXPECT_EQ_INT(LEPT_NULL, lept_get_type(lept_get_array_element(&v, 0)));
+	EXPECT_EQ_INT(LEPT_FALSE, lept_get_type(lept_get_array_element(&v, 1)));
+	EXPECT_EQ_INT(LEPT_TRUE, lept_get_type(lept_get_array_element(&v, 2)));
+	EXPECT_EQ_INT(LEPT_NUMBER, lept_get_type(lept_get_array_element(&v, 3)));
+	EXPECT_EQ_DOUBLE(123.0, lept_get_number(lept_get_array_element(&v, 3)));
+    lept_value *e = lept_get_array_element(&v, 4);
+	EXPECT_EQ_INT(LEPT_STRING, lept_get_type(e));
+	EXPECT_EQ_STRING("abc", lept_get_string(lept_get_array_element(&v, 4)), lept_get_string_length(lept_get_array_element(&v, 4)));
+    lept_free(e);
+    lept_free(&v);
+    EXPECT_EQ_INT(LEPT_PARSE_OK, lept_parse(&v, "[ [ ], [ 0 ], [ 0, 1 ], [ 0, 1, 2 ] ]"));
+	EXPECT_EQ_INT(LEPT_ARRAY, lept_get_type(&v));
+	EXPECT_EQ_SIZE_T(4, lept_get_array_size(&v));
+	EXPECT_EQ_INT(LEPT_ARRAY, lept_get_type(e = lept_get_array_element(&v, 0)));
+	EXPECT_EQ_SIZE_T(0, lept_get_array_size(e));
+    lept_free(e);
+	EXPECT_EQ_INT(LEPT_ARRAY, lept_get_type(e = lept_get_array_element(&v, 1)));
+	EXPECT_EQ_SIZE_T(1, lept_get_array_size(e));
+    lept_free(e);
+	EXPECT_EQ_INT(LEPT_ARRAY, lept_get_type(e = lept_get_array_element(&v, 2)));
+	EXPECT_EQ_SIZE_T(2, lept_get_array_size(e));
+    lept_free(e);
+	EXPECT_EQ_INT(LEPT_ARRAY, lept_get_type(e = lept_get_array_element(&v, 3)));
+	EXPECT_EQ_SIZE_T(3, lept_get_array_size(e));
+    lept_free(e);
     lept_free(&v);
 }
 
@@ -305,6 +330,7 @@ static void test_access() {
 int main() {
 #ifdef _WINDOWS
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+    //_CrtSetBreakAlloc(105);
 #endif
     test_parse();
     test_access();
